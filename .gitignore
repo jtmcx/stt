@@ -1,0 +1,14 @@
+# direnv
+.direnv
+
+# cabal
+cabal-dev
+cabal.project.local
+cabal.sandbox.config
+.cabal-sandbox
+dist
+dist-*
+
+# misc
+*.old
+*.bak

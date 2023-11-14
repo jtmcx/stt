@@ -1,0 +1,51 @@
+cabal-version:      3.0
+name:               stt
+version:            0.1.0.0
+synopsis:           A playground for set-theoretic types
+homepage:           https://jtm.cx/git/stt
+license:            ISC
+license-file:       LICENSE
+author:             jtm
+maintainer:         noreply@jtm.cx
+category:           Language
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+
+common warnings
+    ghc-options: -Wall
+
+library
+    import:           warnings
+    exposed-modules:
+        STT
+    build-depends:
+        base          ^>= 4.16.4.0
+      , text          >= 1.2.5
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+executable stt
+    import:           warnings
+    main-is:          Main.hs
+    -- other-modules:
+    --     Repl
+    build-depends:
+        base          ^>=4.16.4.0
+      , text          >= 1.2.5
+      , stt 
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+test-suite stt-test
+    import:           warnings
+    default-language: Haskell2010
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:
+        base          ^>=4.16.4.0
+      , hspec         >= 2.11
+      , hspec-expectations
+      , hedgehog      >= 1.4
+      , hspec-hedgehog >= 0.1.0.0
+      , stt

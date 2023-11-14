@@ -9,7 +9,9 @@ newlines-between-decls: 1
 haddock-style: single-line
 haddock-style-module: single-line
 let-style: inline
-in-style: no-space
 single-constraint-parens: never
 unicode: always
-respectful: false
+respectful: true
+
+# TODO: nix version of fourmolu is too old for:
+# in-style: no-space

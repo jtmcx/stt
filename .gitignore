@@ -9,6 +9,9 @@ cabal.sandbox.config
 dist
 dist-*
 
+# Repline
+.history
+
 # misc
 *.old
 *.bak

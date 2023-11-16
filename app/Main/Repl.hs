@@ -1,64 +1,81 @@
 module Main.Repl (repl) where
 
-import Data.Char (isSpace)
-import STT.Parser (parseExpr)
-import System.Console.Haskeline
+import Control.Monad.Trans
+import STT.Eval
+import STT.Parser
+import STT.Syntax
+import STT.Pretty
+import qualified System.Console.Repline as R
+import qualified Prettyprinter as P
+import qualified Prettyprinter.Render.Text as P
+import Text.Printf (printf)
 
--- ----------------------------------------------------------------------------
--- Utilities
+type Repl a = R.HaskelineT IO a
 
-type Repl a = InputT IO a
+-- | The Repl prompt.
+banner :: R.MultiLine -> Repl String
+banner R.SingleLine = return "stt> "
+banner R.MultiLine  = return "...> "
 
--- | The default REPL prompt.
-prompt :: String
-prompt = "stti> "
+-- | Print the welcome message
+hello :: Repl ()
+hello = liftIO $ putStr $ unlines
+  [ "Welcome to stt!"
+  , "Type :help for more information."
+  ]
 
--- | Run the REPL.
-repl :: IO ()
-repl = runInputT defaultSettings (banner >> loop)
+-- | Repl meta commands.
+options :: [(String, String -> Repl ())]
+options =
+  [ ("ast",  cmdAst)
+  , ("help", cmdHelp)
+  , ("quit", const R.abort)
+  ]
+
+-- | Print the list of options
+cmdHelp :: String -> Repl ()
+cmdHelp _ = mapM_ (\(x, y) -> liftIO $ printf "%-16s %s\n" x y) table
   where
-    banner :: Repl ()
-    banner = outputStrLn "Type :help for more information"
+    table :: [(String, String)]
+    table =
+      [ (":ast",   "Parse an expression, and print the AST")
+      , (":help",  "Print this message")
+      , (":paste", "Read multiple lines of input")
+      , (":quit",  "Exit the REPL")
+      ]
 
--- | The main loop.
-loop :: Repl ()
-loop = do
-  mline <- getInputLine prompt
-  case mline of
-    Nothing   -> return ()
-    Just line -> do
-      case splitOnMeta line of
-        Just (":h", _)    -> cmdHelp
-        Just (":help", _) -> cmdHelp
-        Just (":q", _)    -> return ()
-        Just (":quit", _) -> return ()
-        Just (meta, _)    -> outputStrLn $ "Unknown meta command " ++ meta
-        Nothing           -> cmdDefault line
-      loop
+-- | Parse an expression and print the AST
+cmdAst :: String -> Repl ()
+cmdAst line =
+  R.dontCrash $ do
+    e <- unwrap $ parseExpr "repl" line
+    liftIO $ print e
 
--- ----------------------------------------------------------------------------
--- Commands
+-- | Handle a line of input from the repl.
+command :: String -> Repl ()
+command line =
+  R.dontCrash $ do
+    e <- unwrap $ parseExpr "repl" line
+    let e' = normalize [] e
+    liftIO $ P.putDoc (P.pretty e')
+    liftIO $ putStrLn ""
 
--- | Print the REPL help message.
-cmdHelp :: Repl ()
-cmdHelp = do
-  outputStrLn ":h[elp]         Print this message"
-  outputStrLn ":q[uit]         Exit the REPL"
+unwrap :: Show a => Either a b -> Repl b
+unwrap (Right x) = return x
+unwrap (Left err) = liftIO (print err) >> R.abort
 
-cmdDefault :: String -> Repl ()
-cmdDefault line = do
-  case parseExpr "repl" line of
-    Left e -> outputStrLn $ show e
-    Right x -> outputStrLn $ show x
+-- | Return auto-complete suggestions for a given identifier.
+complete :: String -> IO [String]
+complete _ = return []
 
--- ----------------------------------------------------------------------------
--- Utilities
-
--- | Given a line of input from the REPL, parse the first word and see if it
--- starts with a colon. If so, return a pair containing the first word (i.e.,
--- the meta command) and the remainder of the input.
-splitOnMeta :: String -> Maybe (String, String)
-splitOnMeta line =
-  case break isSpace (dropWhile isSpace line) of
-    p@(':':_, _) -> Just p
-    _            -> Nothing
+repl :: IO ()
+repl = R.evalReplOpts $ R.ReplOpts
+  { R.banner           = banner
+  , R.command          = command
+  , R.options          = options
+  , R.prefix           = Just ':'
+  , R.multilineCommand = Just "paste"
+  , R.tabComplete      = R.Word0 complete
+  , R.initialiser      = hello
+  , R.finaliser        = return R.Exit
+  }

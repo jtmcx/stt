@@ -1,3 +1,5 @@
+alias b := build
+
 # Print 'just -l'
 help:
 	@just -l

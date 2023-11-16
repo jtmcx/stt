@@ -9,10 +9,15 @@ data Expr
     -- ^ A literal boolean.
   | EVar Text
     -- ^ A variable.
+  | EPair Expr Expr
+    -- ^ A pair.
   | EApp Expr Expr
     -- ^ An application.
   | EFn Text Expr
     -- ^ A lambda.
-  | EPair Expr Expr
-    -- ^ A pair.
   deriving (Eq, Show)
+
+-- | Top level declarations
+data Decl
+  = DDef Text Expr
+    -- ^ A top-level definition

@@ -15,6 +15,8 @@ data Expr
     -- ^ An application.
   | EFn Text Expr
     -- ^ A lambda.
+  | ELet Text Expr Expr
+    -- ^ A let binding.
   deriving (Eq, Show)
 
 -- | Top level declarations

@@ -14,11 +14,10 @@ instance Pretty Expr where
   pretty = prettyExpr
 
 prettyExpr :: Expr -> Doc ann
-prettyExpr = prettyFn
-
-prettyFn :: Expr -> Doc ann
-prettyFn (EFn x e) = "\\" <> pretty x <+> "->" <+> prettyFn e
-prettyFn e = prettyApp e
+prettyExpr e = case e of
+  EFn x e'     -> "\\" <> pretty x <+> "->" <+> pretty e'
+  ELet x e1 e2 -> "let" <> pretty x <+> "=" <+> pretty e1 <+> "in" <+> pretty e2
+  _            -> prettyApp e
 
 prettyApp :: Expr -> Doc ann
 prettyApp (EApp e1 e2) = prettyApp e1 <+> prettyTerm e2

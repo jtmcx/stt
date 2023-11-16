@@ -59,12 +59,13 @@ eval env e = runReader (evalExpr e) env
 -- | Evaluate an expression into normal form.
 evalExpr :: Expr -> Eval Normal
 evalExpr e = case e of
-  EBool x     -> return $ NNeutral (NBool x)
-  EInt x      -> return $ NNeutral (NInt x)
-  EVar x      -> evalVar x
-  EPair e1 e2 -> evalPair e1 e2
-  EApp e1 e2  -> evalApp e1 e2
-  EFn x e'    -> evalFn x e'
+  EBool x      -> return $ NNeutral (NBool x)
+  EInt x       -> return $ NNeutral (NInt x)
+  EVar x       -> evalVar x
+  EPair e1 e2  -> evalPair e1 e2
+  EApp e1 e2   -> evalApp e1 e2
+  EFn x e'     -> evalFn x e'
+  ELet x e1 e2 -> evalLet x e1 e2
 
 -- | Lookup a variable in the environment.
 evalVar :: Text -> Eval Normal
@@ -99,6 +100,12 @@ evalFn :: Text -> Expr -> Eval Normal
 evalFn x e = do
   env <- ask
   return $ NClosure (Closure x e env)
+
+-- | Evaluate a let binding.
+evalLet :: Text -> Expr -> Expr -> Eval Normal
+evalLet x e1 e2 = do
+  n1 <- evalExpr e1
+  local (Map.insert x n1) $ evalExpr e2
 
 -- ----------------------------------------------------------------------------
 -- Reification

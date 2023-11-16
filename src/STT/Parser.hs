@@ -20,7 +20,8 @@ keywords =
   [ "false"
   , "true"
   , "def"
-  , "λ"
+  , "let"
+  , "in"
   ]
 
 lexer :: Token.TokenParser st
@@ -90,9 +91,20 @@ efn = do
   e <- expr
   return $ EFn x e
 
+-- | Parse a let binding.
+elet :: Parser Expr
+elet = do
+  reserved "let"
+  x <- T.pack <$> identifier
+  symbol "="
+  e1 <- expr
+  reserved "in"
+  e2 <- expr
+  return $ ELet x e1 e2
+
 -- | Parse an expression.
 expr :: Parser Expr
-expr = efn <|> eapp
+expr = efn <|> elet <|> eapp
 
 -- ----------------------------------------------------------------------------
 -- Declaration Parser

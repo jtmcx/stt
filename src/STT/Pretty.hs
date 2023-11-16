@@ -1,45 +1,52 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module STT.Pretty where
 
 import Prettyprinter (Doc, Pretty, pretty, (<+>))
 import qualified Prettyprinter as P
-import STT.Syntax
+import STT.Syntax ( Decl(..), Expr(..) )
+
+-- ----------------------------------------------------------------------------
+-- Pretty Expressions
+
+instance Pretty Expr where
+  pretty = prettyExpr
+
+prettyExpr :: Expr -> Doc ann
+prettyExpr = prettyFn
 
 prettyFn :: Expr -> Doc ann
-prettyFn (EFn x e) =
-  "\\" <> pretty x <+> "->" <+> prettyFn e
+prettyFn (EFn x e) = "\\" <> pretty x <+> "->" <+> prettyFn e
 prettyFn e = prettyApp e
 
 prettyApp :: Expr -> Doc ann
-prettyApp (EApp e1 e2) =
-  prettyApp e1 <+> prettyTerm e2
+prettyApp (EApp e1 e2) = prettyApp e1 <+> prettyTerm e2
 prettyApp e = prettyTerm e
 
 prettyTerm :: Expr -> Doc ann
-prettyTerm (EBool x) = prettyBool x
-prettyTerm (EInt x) = pretty x
-prettyTerm (EVar x) = pretty x
-prettyTerm (EPair x y) = prettyPair x y
-prettyTerm e = P.parens $ pretty e
+prettyTerm e = case e of
+  EBool True  -> "true"
+  EBool False -> "false"
+  EInt x      -> pretty x
+  EVar x      -> pretty x
+  EPair x y   -> prettyPair x y
+  _           -> P.parens $ pretty e
 
 prettyPair :: Expr -> Expr -> Doc ann
-prettyPair x y = P.group $ P.encloseSep l r s [pretty x, pretty y]
+prettyPair x y =
+    P.group $ P.encloseSep open close sep [pretty x, pretty y]
   where
-    l = P.flatAlt "( " "("
-    r = P.flatAlt " )" ")"
-    s = ", "
+    open  = P.flatAlt "( " "("
+    close = P.flatAlt " )" ")"
+    sep   = ", "
 
-prettyBool :: Bool -> Doc ann
-prettyBool True = "true"
-prettyBool False = "false"
-
-instance Pretty Expr where
-  pretty = prettyFn
-
-prettyDef :: Decl -> Doc ann
-prettyDef (DDef x e) =
-  "def" <+> pretty x <+> "=" <+> pretty e
+-- ----------------------------------------------------------------------------
+-- Pretty Declarations
 
 instance Pretty Decl where
-  pretty = prettyDef
+  pretty = prettyDecl
+
+prettyDecl :: Decl -> Doc ann
+prettyDecl (DDef x e) =
+  "def" <+> pretty x <+> "=" <+> pretty e

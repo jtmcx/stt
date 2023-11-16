@@ -1,6 +1,7 @@
 module STT.Parser
   ( parseExpr
   , parseDecl
+  , parseStatement
   ) where
 
 import Control.Monad (void)
@@ -92,12 +93,6 @@ efn = do
 expr :: Parser Expr
 expr = efn <|> eapp
 
--- | Parse an expression.
-parseExpr :: String -- ^ Source name
-          -> String -- ^ Input text
-          -> Either ParseError Expr
-parseExpr = parse (whiteSpace >> expr <* eof)
-
 -- ----------------------------------------------------------------------------
 -- Declaration Parser
 
@@ -109,8 +104,26 @@ decl = do
   e <- expr
   return $ DDef x e
 
+-- ----------------------------------------------------------------------------
+-- Exported Parsers
+
 -- | Parse an expression.
+parseExpr :: String -- ^ Source name
+          -> String -- ^ Input text
+          -> Either ParseError Expr
+parseExpr = parse (whiteSpace >> expr <* eof)
+
+-- | Parse a declaration.
 parseDecl :: String -- ^ Source name
           -> String -- ^ Input text
           -> Either ParseError Decl
 parseDecl = parse (whiteSpace >> decl <* eof)
+
+-- | Parse a top-level statement.
+parseStatement :: String -- ^ Source name
+               -> String -- ^ Input text
+               -> Either ParseError (Either Decl Expr)
+parseStatement = parse (whiteSpace >> p <* eof)
+  where
+    p :: Parser (Either Decl Expr)
+    p = Left <$> decl <|> Right <$> expr

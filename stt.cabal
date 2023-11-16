@@ -24,6 +24,7 @@ library
       , STT.Syntax
     build-depends:
         base          ^>= 4.16.4.0
+      , containers    >= 0.6
       , text          >= 1.2.5
       , mtl           >= 2.3.1
       , parsec        >= 3.1.15
@@ -38,6 +39,7 @@ executable stt
         Main.Repl
     build-depends:
         base          ^>=4.16.4.0
+      , containers    >= 0.6
       , text          >= 1.2.5
       , mtl           >= 2.3.1
       , prettyprinter >= 1.7.1

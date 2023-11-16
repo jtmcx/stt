@@ -11,6 +11,8 @@ module STT.Eval
 import Control.Monad.Reader (Reader, runReader, MonadReader(..))
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Map (Map)
+import qualified Data.Map as Map
 import STT.Syntax (Expr (..))
 
 -- ----------------------------------------------------------------------------
@@ -43,7 +45,7 @@ data Closure = Closure Text Expr Env
   deriving (Eq, Show)
 
 -- | A list of bound variables.
-type Env = [(Text, Normal)]
+type Env = Map Text Normal
 
 -- ----------------------------------------------------------------------------
 -- Evaluation
@@ -68,7 +70,7 @@ evalExpr e = case e of
 evalVar :: Text -> Eval Normal
 evalVar x = do
   env <- ask
-  case lookup x env of
+  case Map.lookup x env of
     Just v  -> return v
     Nothing -> return $ NNeutral (NVar x)
 
@@ -90,7 +92,7 @@ evalApp e1 e2 = do
   where
     instantiate :: Closure -> Normal -> Eval Normal
     instantiate (Closure x e env) n =
-      local (const $ (x, n) : env) (evalExpr e)
+      local (const $ Map.insert x n env) (evalExpr e)
 
 -- | Convert a lambda into a closure with the current 'Env'.
 evalFn :: Text -> Expr -> Eval Normal
@@ -112,7 +114,7 @@ reifyNormal :: Normal -> Reify Expr
 reifyNormal (NNeutral n) = reifyNeutral n
 reifyNormal (NClosure (Closure x e env)) = do
   x' <- freshen x
-  let n = eval ((x, NNeutral (NVar x')) : env) e
+  let n = eval (Map.insert x (NNeutral (NVar x')) env) e
   EFn x' <$> local (x' :) (reifyNormal n)
 
 -- | Readback a 'Neutral' term as an 'Expr'.
@@ -137,4 +139,4 @@ freshen x = do
 
 -- | Evaluate and reify a given expression.
 normalize :: Env -> Expr -> Expr
-normalize env e = reify (map fst env) (eval env e)
+normalize env e = reify (Map.keys env) (eval env e)

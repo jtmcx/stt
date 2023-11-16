@@ -5,7 +5,7 @@ module STT.Pretty where
 
 import Prettyprinter (Doc, Pretty, pretty, (<+>))
 import qualified Prettyprinter as P
-import STT.Syntax ( Decl(..), Expr(..) )
+import STT.Syntax (Decl(..), Expr(..))
 
 -- ----------------------------------------------------------------------------
 -- Pretty Expressions

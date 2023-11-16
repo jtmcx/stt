@@ -1,7 +1,8 @@
 module STT.Parser
   ( parseExpr
   , parseDecl
-  , parseStatement
+  , parseToplevel
+  , parseFile
   ) where
 
 import Control.Monad (void)
@@ -25,7 +26,7 @@ keywords =
 lexer :: Token.TokenParser st
 lexer = Token.makeTokenParser $ emptyDef
   { Token.commentLine = "#"
-  , Token.identStart = letter
+  , Token.identStart = letter <|> oneOf "_"
   , Token.identLetter = alphaNum <|> oneOf "_'"
   , Token.reservedNames = keywords
   }
@@ -120,10 +121,16 @@ parseDecl :: String -- ^ Source name
 parseDecl = parse (whiteSpace >> decl <* eof)
 
 -- | Parse a top-level statement.
-parseStatement :: String -- ^ Source name
-               -> String -- ^ Input text
-               -> Either ParseError (Either Decl Expr)
-parseStatement = parse (whiteSpace >> p <* eof)
+parseToplevel :: String -- ^ Source name
+              -> String -- ^ Input text
+              -> Either ParseError (Either Decl Expr)
+parseToplevel = parse (whiteSpace >> p <* eof)
   where
     p :: Parser (Either Decl Expr)
     p = Left <$> decl <|> Right <$> expr
+
+-- | Parse a sequence of declarations.
+parseFile :: String -- ^ Source name
+          -> String -- ^ Input text
+          -> Either ParseError [Decl]
+parseFile = parse (whiteSpace >> many decl <* eof)

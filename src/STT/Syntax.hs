@@ -2,6 +2,7 @@ module STT.Syntax where
 
 import Data.Text (Text)
 
+-- | Expressions.
 data Expr
   = EInt Int
     -- ^ A literal integer.
@@ -19,7 +20,31 @@ data Expr
     -- ^ A let binding.
   deriving (Eq, Show)
 
--- | Top level declarations
+-- | Types.
+data Ty
+  = TEmpty
+    -- ^ The bottom type.
+  | TAny
+    -- ^ The top type.
+  | TInt (Maybe Int)
+    -- ^ Either the 'Int' type, or a singleton integer.
+  | TBool (Maybe Bool)
+    -- ^ Either the 'Bool' type, or a singleton boolean.
+  | TPair Ty Ty
+    -- ^ The type of pairs.
+  | TFn Ty Ty
+    -- ^ The type of functions.
+  | TAnd Ty Ty
+    -- ^ Intersection of two types.
+  | TOr Ty Ty
+    -- ^ Union of two types.
+  | TDiff Ty Ty
+    -- ^ Difference of two types.
+  | TNot Ty
+    -- ^ Negation of a type.
+  deriving (Eq, Show)
+
+-- | Top-level declarations.
 data Decl
   = DDef Text Expr
-    -- ^ A top-level definition
+    -- ^ A top-level definition.

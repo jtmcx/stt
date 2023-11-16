@@ -1,15 +1,18 @@
 module STT.Parser
   ( parseExpr
+  , parseTy
   , parseDecl
   , parseToplevel
   , parseFile
   ) where
 
 import Control.Monad (void)
+import Data.Text (Text)
 import qualified Data.Text as T
-import STT.Syntax (Decl (..), Expr (..))
+import STT.Syntax (Decl(..), Expr(..), Ty(..))
 import Text.Parsec.Language (emptyDef)
 import qualified Text.Parsec.Token as Token
+import Text.Parsec.Expr
 import Text.ParserCombinators.Parsec
 
 -- ----------------------------------------------------------------------------
@@ -22,6 +25,10 @@ keywords =
   , "def"
   , "let"
   , "in"
+  , "Int"
+  , "Bool"
+  , "Any"
+  , "Empty"
   ]
 
 lexer :: Token.TokenParser st
@@ -48,30 +55,31 @@ symbol :: String -> Parser ()
 symbol = void <$> Token.symbol lexer
 
 -- ----------------------------------------------------------------------------
+-- Common Parsers
+
+int :: Parser Int
+int = lexeme (read <$> many1 digit) <?> "int"
+
+bool :: Parser Bool
+bool = True  <$ reserved "true"
+   <|> False <$ reserved "false"
+   <?> "bool"
+
+var :: Parser Text
+var = T.pack <$> identifier <?> "variable"
+
+-- ----------------------------------------------------------------------------
 -- Expression Parser
-
--- | Parse an integer expression.
-eint :: Parser Expr
-eint = EInt <$> lexeme (read <$> many1 digit) <?> "int"
-
--- | Parse a boolean expression.
-ebool :: Parser Expr
-ebool = EBool <$> val <?> "bool"
-  where
-    val :: Parser Bool
-    val = True  <$ reserved "true"
-      <|> False <$ reserved "false"
-
--- | Parse a variable.
-evar :: Parser Expr
-evar = EVar . T.pack <$> identifier <?> "variable"
 
 -- | Parse a sequence of applications.
 eapp :: Parser Expr
 eapp = foldl1 EApp <$> many1 term
   where
     term :: Parser Expr
-    term = eint <|> ebool <|> evar <|> epair
+    term = EInt  <$> int
+       <|> EBool <$> bool
+       <|> EVar  <$> var
+       <|> epair
 
 -- | Parse a parenthesized expression. If it contains commas, parse the
 -- expression as a sequence of pairs.
@@ -107,6 +115,53 @@ expr :: Parser Expr
 expr = efn <|> elet <|> eapp
 
 -- ----------------------------------------------------------------------------
+-- Type Parser
+
+-- | Parse the 'Any' type.
+tany :: Parser Ty
+tany = TAny <$ reserved "Any"
+
+-- | Parse the 'Empty' type.
+tempty :: Parser Ty
+tempty = TEmpty <$ reserved "Empty"
+
+-- | Parse the 'Int' type.
+tint :: Parser Ty
+tint = TInt <$> val
+  where val = Nothing <$ reserved "Int"
+          <|> Just <$> int
+
+-- | Parse the 'Bool' type.
+tbool :: Parser Ty
+tbool = TBool <$> val
+  where val = Nothing <$ reserved "Bool"
+          <|> Just <$> bool
+
+-- | Parse a parenthesized type. If it contains commas, parse the
+-- expression as a sequence of pair types.
+tpair :: Parser Ty
+tpair = do
+  symbol "("
+  es <- sepBy1 ty (symbol ",")
+  symbol ")"
+  return $ foldr1 TPair es
+
+-- | Parse a type.
+ty :: Parser Ty
+ty = buildExpressionParser table term
+  where
+    term :: Parser Ty
+    term = tany <|> tempty <|> tbool <|> tint <|> tpair
+
+    table =
+      [ [Prefix (TNot  <$ symbol "~")]
+      , [Infix  (TFn   <$ symbol "->") AssocRight]
+      , [Infix  (TAnd  <$ symbol "&")  AssocRight]
+      , [Infix  (TOr   <$ symbol "|")  AssocRight]
+      , [Infix  (TDiff <$ symbol "\\") AssocRight]
+      ]
+
+-- ----------------------------------------------------------------------------
 -- Declaration Parser
 
 decl :: Parser Decl
@@ -121,28 +176,24 @@ decl = do
 -- Exported Parsers
 
 -- | Parse an expression.
-parseExpr :: String -- ^ Source name
-          -> String -- ^ Input text
-          -> Either ParseError Expr
+parseExpr :: String -> String -> Either ParseError Expr
 parseExpr = parse (whiteSpace >> expr <* eof)
 
+-- | Parse a type.
+parseTy :: String -> String -> Either ParseError Ty
+parseTy = parse (whiteSpace >> ty <* eof)
+
 -- | Parse a declaration.
-parseDecl :: String -- ^ Source name
-          -> String -- ^ Input text
-          -> Either ParseError Decl
+parseDecl :: String -> String -> Either ParseError Decl
 parseDecl = parse (whiteSpace >> decl <* eof)
 
 -- | Parse a top-level statement.
-parseToplevel :: String -- ^ Source name
-              -> String -- ^ Input text
-              -> Either ParseError (Either Decl Expr)
+parseToplevel :: String -> String -> Either ParseError (Either Decl Expr)
 parseToplevel = parse (whiteSpace >> p <* eof)
   where
     p :: Parser (Either Decl Expr)
     p = Left <$> decl <|> Right <$> expr
 
 -- | Parse a sequence of declarations.
-parseFile :: String -- ^ Source name
-          -> String -- ^ Input text
-          -> Either ParseError [Decl]
+parseFile :: String -> String -> Either ParseError [Decl]
 parseFile = parse (whiteSpace >> many decl <* eof)

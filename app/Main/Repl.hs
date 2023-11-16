@@ -33,14 +33,15 @@ hello = liftIO $ putStr $ unlines
 -- | Repl meta commands.
 options :: [(String, String -> Repl ())]
 options =
-  [ ("ast",  cmdAst)
-  , ("env",  cmdEnv)
-  , ("h",    cmdHelp)
-  , ("help", cmdHelp)
-  , ("l",    cmdLoad)
-  , ("load", cmdLoad)
-  , ("q",    const R.abort)
-  , ("quit", const R.abort)
+  [ ("ast",   cmdAst)
+  , ("astty", cmdAstTy)
+  , ("env",   cmdEnv)
+  , ("h",     cmdHelp)
+  , ("help",  cmdHelp)
+  , ("l",     cmdLoad)
+  , ("load",  cmdLoad)
+  , ("q",     const R.abort)
+  , ("quit",  const R.abort)
   ]
 
 -- | Print the list of options.
@@ -49,18 +50,26 @@ cmdHelp _ = mapM_ (\(x, y) -> liftIO $ printf "%-16s %s\n" x y) table
   where
     table :: [(String, String)]
     table =
-      [ (":ast",    "Parse an expression and print the AST")
+      [ (":ast",    "Parse an expression and print its AST")
+      , (":astty",  "Parse a type and print its AST")
       , (":env",    "Print the current environment")
       , (":h[elp]", "Print this message")
       , (":paste",  "Read multiple lines of input")
       , (":q[uit]", "Exit the REPL")
       ]
 
--- | Parse an expression and print the AST.
+-- | Parse an expression and print its AST.
 cmdAst :: String -> Repl ()
 cmdAst line =
   R.dontCrash $ do
     e <- unwrap $ parseExpr "repl" line
+    liftIO $ print e
+
+-- | Parse a type and print its AST.
+cmdAstTy :: String -> Repl ()
+cmdAstTy line =
+  R.dontCrash $ do
+    e <- unwrap $ parseTy "repl" line
     liftIO $ print e
 
 -- | Print the current environment.

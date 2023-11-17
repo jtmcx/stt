@@ -22,6 +22,8 @@ library
       , STT.Parser
       , STT.Pretty
       , STT.Syntax
+      , STT.Typing.BDD
+      , STT.Typing.Classes.BooleanAlgebra
     build-depends:
         base          ^>= 4.16.4.0
       , containers    >= 0.6
@@ -50,6 +52,7 @@ executable stt
 
 test-suite stt-test
     import:           warnings
+    ghc-options:      -Wno-missing-home-modules
     default-language: Haskell2010
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test

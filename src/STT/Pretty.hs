@@ -15,7 +15,7 @@ instance Pretty Expr where
 
 prettyExpr :: Expr -> Doc ann
 prettyExpr e = case e of
-  EFn x e'     -> "\\" <> pretty x <+> "->" <+> pretty e'
+  EFn x e'     -> "λ" <> pretty x <+> "->" <+> pretty e'
   ELet x e1 e2 -> "let" <> pretty x <+> "=" <+> pretty e1 <+> "in" <+> pretty e2
   _            -> prettyApp e
 

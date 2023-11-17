@@ -25,6 +25,10 @@ keywords =
   , "def"
   , "let"
   , "in"
+  , "if"
+  , "is"
+  , "then"
+  , "else"
   , "Int"
   , "Bool"
   , "Any"
@@ -110,9 +114,21 @@ elet = do
   e2 <- expr
   return $ ELet x e1 e2
 
+eif :: Parser Expr
+eif = do
+  reserved "if"
+  e1 <- expr
+  reserved "is"
+  t <- ty
+  reserved "then"
+  e2 <- expr
+  reserved "else"
+  e3 <- expr
+  return $ EIf e1 t e2 e3
+
 -- | Parse an expression.
 expr :: Parser Expr
-expr = efn <|> elet <|> eapp
+expr = efn <|> elet <|> eif <|> eapp
 
 -- ----------------------------------------------------------------------------
 -- Type Parser

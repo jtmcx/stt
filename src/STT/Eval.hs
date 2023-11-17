@@ -13,7 +13,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Map (Map)
 import qualified Data.Map as Map
-import STT.Syntax (Expr (..))
+import STT.Syntax (Expr (..), Ty(..))
 
 -- ----------------------------------------------------------------------------
 -- Normal Form
@@ -59,13 +59,14 @@ eval env e = runReader (evalExpr e) env
 -- | Evaluate an expression into normal form.
 evalExpr :: Expr -> Eval Normal
 evalExpr e = case e of
-  EBool x      -> return $ NNeutral (NBool x)
-  EInt x       -> return $ NNeutral (NInt x)
-  EVar x       -> evalVar x
-  EPair e1 e2  -> evalPair e1 e2
-  EApp e1 e2   -> evalApp e1 e2
-  EFn x e'     -> evalFn x e'
-  ELet x e1 e2 -> evalLet x e1 e2
+  EBool x        -> return $ NNeutral (NBool x)
+  EInt x         -> return $ NNeutral (NInt x)
+  EVar x         -> evalVar x
+  EPair e1 e2    -> evalPair e1 e2
+  EApp e1 e2     -> evalApp e1 e2
+  EFn x e'       -> evalFn x e'
+  ELet x e1 e2   -> evalLet x e1 e2
+  EIf e1 t e2 e3 -> evalIf e1 t e2 e3
 
 -- | Lookup a variable in the environment.
 evalVar :: Text -> Eval Normal
@@ -106,6 +107,10 @@ evalLet :: Text -> Expr -> Expr -> Eval Normal
 evalLet x e1 e2 = do
   n1 <- evalExpr e1
   local (Map.insert x n1) $ evalExpr e2
+
+evalIf :: Expr -> Ty -> Expr -> Expr -> Eval Normal
+evalIf = undefined
+
 
 -- ----------------------------------------------------------------------------
 -- Reification

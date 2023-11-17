@@ -18,6 +18,8 @@ data Expr
     -- ^ A lambda.
   | ELet Text Expr Expr
     -- ^ A let binding.
+  | EIf Expr Ty Expr Expr
+    -- ^ An if statement.
   deriving (Eq, Show)
 
 -- | Types.

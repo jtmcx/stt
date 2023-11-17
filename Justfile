@@ -1,4 +1,5 @@
 alias b := build
+alias t := test
 
 # Print 'just -l'
 help:

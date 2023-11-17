@@ -98,10 +98,10 @@ epair = do
 efn :: Parser Expr
 efn = do
   symbol "λ" <|> symbol "\\"
-  x <- T.pack <$> identifier
-  symbol "->"
+  xs <- many1 (T.pack <$> identifier)
+  symbol ","
   e <- expr
-  return $ EFn x e
+  return $ foldr EFn e xs
 
 -- | Parse a let binding.
 elet :: Parser Expr

@@ -1,7 +1,7 @@
 # Church numerals
 
-def zero = \s -> \z -> z
-def succ = \p -> \s -> \z -> s (p s z)
+def zero = \s z, z
+def succ = \p s z, s (p s z)
 
 def _0 = zero
 def _1 = succ zero
@@ -12,9 +12,9 @@ def _3 = succ (succ (succ zero))
 #
 # stt> :load examples/church.stt
 # stt> :env
-# def _0 = \s -> \z -> z
-# def _1 = \s -> \z -> s z
-# def _2 = \s -> \z -> s (s z)
-# def _3 = \s -> \z -> s (s (s z))
-# def succ = \p -> \s -> \z -> s (p s z)
-# def zero = \s -> \z -> z
+# def _0 = λs, λz, z
+# def _1 = λs, λz, s z
+# def _2 = λs, λz, s (s z)
+# def _3 = λs, λz, s (s (s z))
+# def succ = λp, λs, λz, s (p s z)
+# def zero = λs, λz, z

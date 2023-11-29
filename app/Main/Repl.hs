@@ -78,7 +78,7 @@ cmdEnv _ = do
     env <- get
     mapM_ (each env) (Map.toList env)
   where
-    each :: Env -> (Text, Normal) -> Repl ()
+    each :: Env -> (Text, Value) -> Repl ()
     each env (x, n) =
       pp $ DDef x (reify (Map.keys env) n)
 

@@ -1,6 +1,7 @@
+{-# LANGUAGE LambdaCase #-}
+
 module STT.Eval
-  ( Normal(..)
-  , Neutral(..)
+  ( Value(..)
   , Closure(..)
   , Env
   , eval
@@ -18,28 +19,22 @@ import STT.Syntax (Expr (..), Ty(..))
 -- ----------------------------------------------------------------------------
 -- Normal Form
 
--- | An expression in normal form.
-data Normal
-  = NNeutral Neutral
-    -- ^ A neutral value.
-  | NClosure Closure
-    -- ^ A closure.
-  deriving (Eq, Show)
-
--- | A neutral value.
-data Neutral
-  = NUnit
+-- | A value.
+data Value
+  = VUnit
     -- ^ The unit value.
-  | NBool Bool
+  | VBool Bool
     -- ^ A boolean.
-  | NInt Int
+  | VInt Int
     -- ^ An integer.
-  | NVar Text
-    -- ^ A variable.
-  | NApp Neutral Normal
-    -- ^ An application.
-  | NPair Normal Normal
+  | VPair Value Value
     -- ^ A pair.
+  | VAbs Closure
+    -- ^ A closure.
+  | VVar Text
+    -- ^ A variable.
+  | VApp Value Value
+    -- ^ An application.
   deriving (Eq, Show)
 
 -- | A lambda with a captured environment.
@@ -47,7 +42,7 @@ data Closure = Closure Text Expr Env
   deriving (Eq, Show)
 
 -- | A list of bound variables.
-type Env = Map Text Normal
+type Env = Map Text Value
 
 -- ----------------------------------------------------------------------------
 -- Evaluation
@@ -55,92 +50,91 @@ type Env = Map Text Normal
 type Eval = Reader Env
 
 -- | Evaluate an expression into normal form.
-eval :: Env -> Expr -> Normal
+eval :: Env -> Expr -> Value
 eval env e = runReader (evalExpr e) env
 
 -- | Evaluate an expression into normal form.
-evalExpr :: Expr -> Eval Normal
-evalExpr e = case e of
-  EUnit          -> return $ NNeutral NUnit
-  EBool x        -> return $ NNeutral (NBool x)
-  EInt x         -> return $ NNeutral (NInt x)
+evalExpr :: Expr -> Eval Value
+evalExpr = \case
+  EUnit          -> return VUnit
+  EBool x        -> return (VBool x)
+  EInt x         -> return (VInt x)
   EVar x         -> evalVar x
   EPair e1 e2    -> evalPair e1 e2
   EApp e1 e2     -> evalApp e1 e2
-  EFn x e'       -> evalFn x e'
+  EFn x e        -> evalFn x e
   ELet x e1 e2   -> evalLet x e1 e2
   EIf e1 t e2 e3 -> evalIf e1 t e2 e3
 
 -- | Lookup a variable in the environment.
-evalVar :: Text -> Eval Normal
+evalVar :: Text -> Eval Value
 evalVar x = do
   env <- ask
   case Map.lookup x env of
     Just v  -> return v
-    Nothing -> return $ NNeutral (NVar x)
+    Nothing -> return (VVar x)
 
 -- | Evaluate the elements of a pair.
-evalPair :: Expr -> Expr -> Eval Normal
+evalPair :: Expr -> Expr -> Eval Value
 evalPair e1 e2 = do
-  n1 <- evalExpr e1
-  n2 <- evalExpr e2
-  return $ NNeutral (NPair n1 n2)
+  v1 <- evalExpr e1
+  v2 <- evalExpr e2
+  return (VPair v1 v2)
 
 -- | Evaluate an application.
-evalApp :: Expr -> Expr -> Eval Normal
+evalApp :: Expr -> Expr -> Eval Value
 evalApp e1 e2 = do
-  n1 <- evalExpr e1
-  n2 <- evalExpr e2
-  case n1 of
-    NClosure closure -> instantiate closure n2
-    NNeutral n1' -> return $ NNeutral (NApp n1' n2)
+  v1 <- evalExpr e1
+  v2 <- evalExpr e2
+  case v1 of
+    VAbs closure -> instantiate closure v2
+    _            -> return (VApp v1 v2)
   where
-    instantiate :: Closure -> Normal -> Eval Normal
-    instantiate (Closure x e env) n =
-      local (const $ Map.insert x n env) (evalExpr e)
+    instantiate :: Closure -> Value -> Eval Value
+    instantiate (Closure x e env) v =
+      local (const $ Map.insert x v env) (evalExpr e)
 
 -- | Convert a lambda into a closure with the current 'Env'.
-evalFn :: Text -> Expr -> Eval Normal
+evalFn :: Text -> Expr -> Eval Value
 evalFn x e = do
   env <- ask
-  return $ NClosure (Closure x e env)
+  return $ VAbs (Closure x e env)
 
 -- | Evaluate a let binding.
-evalLet :: Text -> Expr -> Expr -> Eval Normal
+evalLet :: Text -> Expr -> Expr -> Eval Value
 evalLet x e1 e2 = do
-  n1 <- evalExpr e1
-  local (Map.insert x n1) $ evalExpr e2
+  v1 <- evalExpr e1
+  local (Map.insert x v1) $ evalExpr e2
 
-evalIf :: Expr -> Ty -> Expr -> Expr -> Eval Normal
+evalIf :: Expr -> Ty -> Expr -> Expr -> Eval Value
 evalIf = undefined
-
 
 -- ----------------------------------------------------------------------------
 -- Reification
 
 type Reify = Reader [Text]
 
--- | Readback a 'Normal' term as an 'Expr'.
-reify :: [Text] -> Normal -> Expr
-reify names n = runReader (reifyNormal n) names
+-- | Readback a 'Value' as an 'Expr'.
+reify :: [Text] -> Value -> Expr
+reify names v = runReader (reifyValue v) names
 
--- | Readback a 'Normal' term as an 'Expr'.
-reifyNormal :: Normal -> Reify Expr
-reifyNormal (NNeutral n) = reifyNeutral n
-reifyNormal (NClosure (Closure x e env)) = do
+-- | Readback a 'Value' as an 'Expr'.
+reifyValue :: Value -> Reify Expr
+reifyValue = \case
+  VUnit        -> return EUnit
+  VBool x      -> return (EBool x)
+  VInt x       -> return (EInt x)
+  VVar x       -> return (EVar x)
+  VPair v1 v2  -> EPair <$> reifyValue v1 <*> reifyValue v2
+  VApp v1 v2   -> EApp <$> reifyValue v1 <*> reifyValue v2
+  VAbs closure -> reifyClosure closure
+
+-- | Readback a 'Closure' as an 'Expr'.
+reifyClosure :: Closure -> Reify Expr
+reifyClosure (Closure x e env) = do
   x' <- freshen x
-  let n = eval (Map.insert x (NNeutral (NVar x')) env) e
-  EFn x' <$> local (x' :) (reifyNormal n)
-
--- | Readback a 'Neutral' term as an 'Expr'.
-reifyNeutral :: Neutral -> Reify Expr
-reifyNeutral n = case n of
-  NUnit     -> return EUnit
-  NBool x   -> return (EBool x)
-  NInt x    -> return (EInt x)
-  NVar x    -> return (EVar x)
-  NPair x y -> EPair <$> reifyNormal x <*> reifyNormal y
-  NApp x y  -> EApp <$> reifyNeutral x <*> reifyNormal y
+  let v = eval (Map.insert x (VVar x') env) e
+  EFn x' <$> local (x' :) (reifyValue v)
 
 -- | Generate a fresh variable name.
 freshen :: Text -> Reify Text

@@ -4,14 +4,16 @@ import Data.Text (Text)
 
 -- | Expressions.
 data Expr
-  = EInt Int
+  = EUnit
+    -- ^ The unit value '()'.
+  | EInt Int
     -- ^ A literal integer.
   | EBool Bool
     -- ^ A literal boolean.
-  | EVar Text
-    -- ^ A variable.
   | EPair Expr Expr
     -- ^ A pair.
+  | EVar Text
+    -- ^ A variable.
   | EApp Expr Expr
     -- ^ An application.
   | EFn Text Expr
@@ -28,6 +30,8 @@ data Ty
     -- ^ The bottom type.
   | TAny
     -- ^ The top type.
+  | TUnit
+    -- ^ The unit type.
   | TInt (Maybe Int)
     -- ^ Either the 'Int' type, or a singleton integer.
   | TBool (Maybe Bool)

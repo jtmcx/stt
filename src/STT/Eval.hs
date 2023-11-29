@@ -28,7 +28,9 @@ data Normal
 
 -- | A neutral value.
 data Neutral
-  = NBool Bool
+  = NUnit
+    -- ^ The unit value.
+  | NBool Bool
     -- ^ A boolean.
   | NInt Int
     -- ^ An integer.
@@ -59,6 +61,7 @@ eval env e = runReader (evalExpr e) env
 -- | Evaluate an expression into normal form.
 evalExpr :: Expr -> Eval Normal
 evalExpr e = case e of
+  EUnit          -> return $ NNeutral NUnit
   EBool x        -> return $ NNeutral (NBool x)
   EInt x         -> return $ NNeutral (NInt x)
   EVar x         -> evalVar x
@@ -132,9 +135,10 @@ reifyNormal (NClosure (Closure x e env)) = do
 -- | Readback a 'Neutral' term as an 'Expr'.
 reifyNeutral :: Neutral -> Reify Expr
 reifyNeutral n = case n of
-  NBool x   -> return $ EBool x
-  NInt x    -> return $ EInt x
-  NVar x    -> return $ EVar x
+  NUnit     -> return EUnit
+  NBool x   -> return (EBool x)
+  NInt x    -> return (EInt x)
+  NVar x    -> return (EVar x)
   NPair x y -> EPair <$> reifyNormal x <*> reifyNormal y
   NApp x y  -> EApp <$> reifyNeutral x <*> reifyNormal y
 

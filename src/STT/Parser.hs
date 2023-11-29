@@ -58,6 +58,9 @@ reserved = Token.reserved lexer
 symbol :: String -> Parser ()
 symbol = void <$> Token.symbol lexer
 
+parens :: Parser a -> Parser a
+parens = Token.parens lexer
+
 -- ----------------------------------------------------------------------------
 -- Common Parsers
 
@@ -83,22 +86,23 @@ eapp = foldl1 EApp <$> many1 term
     term = EInt  <$> int
        <|> EBool <$> bool
        <|> EVar  <$> var
-       <|> epair
+       <|> eparen
 
--- | Parse a parenthesized expression. If it contains commas, parse the
--- expression as a sequence of pairs.
-epair :: Parser Expr
-epair = do
-  symbol "("
-  es <- sepBy1 expr (symbol ",")
-  symbol ")"
-  return $ foldr1 EPair es
+-- | Parse a parenthetical expression. A prenthetical expression is either
+-- the unit value '()', a parenthesized expresion '(x)', or a pair '(x, y)'.
+eparen :: Parser Expr
+eparen = parens $ option EUnit $ do
+  e1 <- expr
+  m2 <- optionMaybe (symbol "," *> expr)
+  case m2 of
+     Nothing -> return e1
+     Just e2 -> return (EPair e1 e2)
 
 -- | Parse a lambda.
 efn :: Parser Expr
 efn = do
   symbol "λ" <|> symbol "\\"
-  xs <- many1 (T.pack <$> identifier)
+  xs <- many1 var
   symbol ","
   e <- expr
   return $ foldr EFn e xs
@@ -107,7 +111,7 @@ efn = do
 elet :: Parser Expr
 elet = do
   reserved "let"
-  x <- T.pack <$> identifier
+  x <- var
   symbol "="
   e1 <- expr
   reserved "in"
@@ -153,21 +157,22 @@ tbool = TBool <$> val
   where val = Nothing <$ reserved "Bool"
           <|> Just <$> bool
 
--- | Parse a parenthesized type. If it contains commas, parse the
--- expression as a sequence of pair types.
-tpair :: Parser Ty
-tpair = do
-  symbol "("
-  es <- sepBy1 ty (symbol ",")
-  symbol ")"
-  return $ foldr1 TPair es
+-- | Parse a parenthetical type. A prenthetical type is either the unit type
+-- '()', a parenthesized type '(a)', or a pair type '(a, b)'.
+tparen :: Parser Ty
+tparen = parens $ option TUnit $ do
+  t1 <- ty
+  m2 <- optionMaybe (symbol "," *> ty)
+  case m2 of
+     Nothing -> return t1
+     Just t2 -> return (TPair t1 t2)
 
 -- | Parse a type.
 ty :: Parser Ty
 ty = buildExpressionParser table term
   where
     term :: Parser Ty
-    term = tany <|> tempty <|> tbool <|> tint <|> tpair
+    term = tany <|> tempty <|> tbool <|> tint <|> tparen
 
     table =
       [ [Prefix (TNot  <$ symbol "~")]
@@ -183,7 +188,7 @@ ty = buildExpressionParser table term
 decl :: Parser Decl
 decl = do
   reserved "def"
-  x <- T.pack <$> identifier
+  x <- var
   symbol "="
   e <- expr
   return $ DDef x e

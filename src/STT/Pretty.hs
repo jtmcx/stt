@@ -7,7 +7,6 @@ module STT.Pretty
   , Ann(..)
   , SepByStyle(..)
   , prettyExpr
-  , prettyEAnn
   , prettyTy
   , prettyDecl
   ) where
@@ -133,19 +132,14 @@ prettyTBase enc t = case t of
 -- Pretty Expressions
 
 instance Pretty Expr where
-  pretty = P.unAnnotate . prettyEAnn Unicode
-
-prettyEAnn :: Encoding -> Expr -> Doc Ann
-prettyEAnn enc = \case
-  EAnn e t -> prettyExpr enc e <+> ":" <+> prettyTy enc Hang t
-  e        -> prettyExpr enc e
+  pretty = P.unAnnotate . prettyExpr Unicode
 
 prettyExpr :: Encoding -> Expr -> Doc Ann
 prettyExpr enc = \case
     EIf e1 ty e2 e3 -> prettyEIf enc e1 ty e2 e3
     ELet x e1 e2    -> prettyELet enc x e1 e2
     EFn x e         -> uncurry (prettyEFn enc) $ collectArgs (EFn x e)
-    e               -> prettyEApp enc e
+    e               -> prettyEAnn enc e
   where
     collectArgs :: Expr -> ([Text], Expr)
     collectArgs (EFn x e) = first (x :) (collectArgs e)
@@ -186,6 +180,11 @@ prettyEFn enc xs e =
       Ascii   -> P.annotate AnnKeyword "\\"
       Unicode -> P.annotate AnnKeyword "λ"
 
+prettyEAnn :: Encoding -> Expr -> Doc Ann
+prettyEAnn enc = \case
+  EAnn e t -> prettyEApp enc e <+> ":" <+> prettyTy enc Hang t
+  e        -> prettyEApp enc e
+
 prettyEApp :: Encoding -> Expr -> Doc Ann
 prettyEApp enc = \case
   EApp e1 e2 -> prettyEApp enc e1 <+> prettyTerm enc e2
@@ -198,8 +197,8 @@ prettyTerm enc = \case
   EBool False -> P.annotate AnnLiteral "false"
   EInt x      -> P.annotate AnnLiteral (pretty x)
   EVar x      -> pretty x
-  EPair e1 e2 -> P.align $ P.tupled [prettyEAnn enc e1, prettyEAnn enc e2]
-  e           -> P.parens $ prettyEAnn enc e
+  EPair e1 e2 -> P.align $ P.tupled [prettyExpr enc e1, prettyExpr enc e2]
+  e           -> P.parens $ prettyExpr enc e
 
 -- ----------------------------------------------------------------------------
 -- Pretty Declarations

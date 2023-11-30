@@ -88,12 +88,21 @@ eapp = foldl1 EApp <$> many1 term
        <|> EVar  <$> var
        <|> eparen
 
+-- | Parse an expression with an optional annotation.
+eann :: Parser Expr
+eann = do
+  e <- eapp
+  m <- optionMaybe (symbol ":" *> ty)
+  case m of
+    Nothing -> return e
+    Just t  -> return (EAnn e t)
+
 -- | Parse a parenthetical expression. A prenthetical expression is either
 -- the unit value '()', a parenthesized expresion '(x)', or a pair '(x, y)'.
 eparen :: Parser Expr
 eparen = parens $ option EUnit $ do
-  e1 <- eann
-  m2 <- optionMaybe (symbol "," *> eann)
+  e1 <- expr
+  m2 <- optionMaybe (symbol "," *> expr)
   case m2 of
      Nothing -> return e1
      Just e2 -> return (EPair e1 e2)
@@ -130,18 +139,9 @@ eif = do
   e3 <- expr
   return $ EIf e1 t e2 e3
 
--- | Parse an expression with an optional annotation.
-eann :: Parser Expr
-eann = do
-  e <- expr
-  m <- optionMaybe (symbol ":" *> ty)
-  case m of
-    Nothing -> return e
-    Just t  -> return (EAnn e t)
-
 -- | Parse an expression.
 expr :: Parser Expr
-expr = efn <|> elet <|> eif <|> eapp
+expr = efn <|> elet <|> eif <|> eann
 
 -- ----------------------------------------------------------------------------
 -- Type Parser
@@ -207,7 +207,7 @@ decl = do
 
 -- | Parse an expression.
 parseExpr :: String -> String -> Either ParseError Expr
-parseExpr = parse (whiteSpace >> eann <* eof)
+parseExpr = parse (whiteSpace >> expr <* eof)
 
 -- | Parse a type.
 parseTy :: String -> String -> Either ParseError Ty
@@ -222,7 +222,7 @@ parseToplevel :: String -> String -> Either ParseError (Either Decl Expr)
 parseToplevel = parse (whiteSpace >> p <* eof)
   where
     p :: Parser (Either Decl Expr)
-    p = Left <$> decl <|> Right <$> eann
+    p = Left <$> decl <|> Right <$> expr
 
 -- | Parse a sequence of declarations.
 parseFile :: String -> String -> Either ParseError [Decl]

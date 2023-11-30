@@ -187,7 +187,7 @@ ppExpr :: Expr -> Repl ()
 ppExpr x = do
   enc <- gets replEncoding
   liftIO $ do
-    Terminal.putDoc (P.reAnnotate ansify $ prettyEAnn enc x)
+    Terminal.putDoc (P.reAnnotate ansify $ prettyExpr enc x)
     putStrLn ""
 
 -- ---------------------------------------------------------------------------

@@ -65,6 +65,7 @@ evalExpr = \case
   EFn x e        -> evalFn x e
   ELet x e1 e2   -> evalLet x e1 e2
   EIf e1 t e2 e3 -> evalIf e1 t e2 e3
+  EAnn e _       -> evalExpr e
 
 -- | Lookup a variable in the environment.
 evalVar :: Text -> Eval Value

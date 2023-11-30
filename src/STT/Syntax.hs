@@ -22,6 +22,8 @@ data Expr
     -- ^ A let binding.
   | EIf Expr Ty Expr Expr
     -- ^ An if statement.
+  | EAnn Expr Ty
+    -- ^ An annotation.
   deriving (Eq, Show)
 
 -- | Types.

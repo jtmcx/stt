@@ -9,7 +9,6 @@ author:               jtm
 maintainer:           noreply@jtm.cx
 category:             Language
 build-type:           Simple
-extra-doc-files:      CHANGELOG.md
 
 common warnings
     ghc-options:      -Wall
@@ -21,6 +20,7 @@ library
       , STT.Eval
       , STT.Parser
       , STT.Pretty
+      , STT.Pretty.SepBy
       , STT.Syntax
       , STT.Typing.BDD
       , STT.Typing.Classes.BooleanAlgebra
@@ -47,6 +47,7 @@ executable stt
       , text          >= 1.2.5
       , mtl           >= 2.3.1
       , prettyprinter >= 1.7.1
+      , prettyprinter-ansi-terminal >= 1.1.3
       , repline       >= 0.4
       , stt 
     hs-source-dirs:   app

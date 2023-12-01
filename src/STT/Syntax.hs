@@ -22,8 +22,12 @@ data Expr
     -- ^ A let binding.
   | EIf Expr Ty Expr Expr
     -- ^ An if statement.
+  | EFst Expr
+    -- ^ First projection of a pair.
+  | ESnd Expr
+    -- ^ Second projection of a pair.
   | EAnn Expr Ty
-    -- ^ An annotation.
+    -- ^ A type annotation.
   deriving (Eq, Show)
 
 -- | Types.

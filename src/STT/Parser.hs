@@ -29,6 +29,8 @@ keywords =
   , "is"
   , "then"
   , "else"
+  , "fst"
+  , "snd"
   , "Int"
   , "Bool"
   , "Any"
@@ -78,20 +80,35 @@ var = T.pack <$> identifier <?> "variable"
 -- ----------------------------------------------------------------------------
 -- Expression Parser
 
+-- | Parse an expression suitible for the left-hand side of an application.
+eterm :: Parser Expr
+eterm = EInt  <$> int
+    <|> EBool <$> bool
+    <|> EVar  <$> var
+    <|> eparen
+
+efst :: Parser Expr
+efst = do
+  reserved "fst"
+  e  <- eterm
+  es <- many eterm
+  return $ foldl EApp (EFst e) es
+
+esnd :: Parser Expr
+esnd = do
+  reserved "snd"
+  e  <- eterm
+  es <- many eterm
+  return $ foldl EApp (ESnd e) es
+
 -- | Parse a sequence of applications.
 eapp :: Parser Expr
-eapp = foldl1 EApp <$> many1 term
-  where
-    term :: Parser Expr
-    term = EInt  <$> int
-       <|> EBool <$> bool
-       <|> EVar  <$> var
-       <|> eparen
+eapp = foldl1 EApp <$> many1 eterm
 
 -- | Parse an expression with an optional annotation.
 eann :: Parser Expr
 eann = do
-  e <- eapp
+  e <- efst <|> esnd <|> eapp
   m <- optionMaybe (symbol ":" *> ty)
   case m of
     Nothing -> return e
@@ -127,6 +144,7 @@ elet = do
   e2 <- expr
   return $ ELet x e1 e2
 
+-- | Parse an if statement.
 eif :: Parser Expr
 eif = do
   reserved "if"

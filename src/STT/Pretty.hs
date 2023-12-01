@@ -188,6 +188,8 @@ prettyEAnn enc = \case
 prettyEApp :: Encoding -> Expr -> Doc Ann
 prettyEApp enc = \case
   EApp e1 e2 -> prettyEApp enc e1 <+> prettyTerm enc e2
+  EFst e     -> "fst" <+> prettyTerm enc e
+  ESnd e     -> "snd" <+> prettyTerm enc e
   e          -> prettyTerm enc e
 
 prettyTerm :: Encoding -> Expr -> Doc Ann

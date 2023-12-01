@@ -33,6 +33,10 @@ data Value
     -- ^ A closure.
   | VVar Text
     -- ^ A variable.
+  | VFst Value
+    -- ^ First projection of a pair.
+  | VSnd Value
+    -- ^ Second projection of a pair.
   | VApp Value Value
     -- ^ An application.
   deriving (Eq, Show)
@@ -63,6 +67,8 @@ evalExpr = \case
   EPair e1 e2    -> evalPair e1 e2
   EApp e1 e2     -> evalApp e1 e2
   EFn x e        -> evalFn x e
+  EFst e         -> evalFst e
+  ESnd e         -> evalSnd e
   ELet x e1 e2   -> evalLet x e1 e2
   EIf e1 t e2 e3 -> evalIf e1 t e2 e3
   EAnn e _       -> evalExpr e
@@ -101,6 +107,20 @@ evalFn x e = do
   env <- ask
   return $ VAbs (Closure x e env)
 
+evalFst :: Expr -> Eval Value
+evalFst e = do
+  v <- evalExpr e
+  case v of
+    VPair x _ -> return x
+    _         -> return (VFst v)
+
+evalSnd :: Expr -> Eval Value
+evalSnd e = do
+  v <- evalExpr e
+  case v of
+    VPair _ x -> return x
+    _         -> return (VSnd v)
+
 -- | Evaluate a let binding.
 evalLet :: Text -> Expr -> Expr -> Eval Value
 evalLet x e1 e2 = do
@@ -129,6 +149,8 @@ reifyValue = \case
   VPair v1 v2  -> EPair <$> reifyValue v1 <*> reifyValue v2
   VApp v1 v2   -> EApp <$> reifyValue v1 <*> reifyValue v2
   VAbs closure -> reifyClosure closure
+  VFst v       -> EFst <$> reifyValue v
+  VSnd v       -> ESnd <$> reifyValue v
 
 -- | Readback a 'Closure' as an 'Expr'.
 reifyClosure :: Closure -> Reify Expr

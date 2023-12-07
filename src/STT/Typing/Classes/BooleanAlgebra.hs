@@ -62,3 +62,13 @@ infixr 5 \/
 -- | Shorthand for 'conjunction'
 (/\) :: BooleanAlgebra a => a -> a -> a
 (/\) = conjunction
+
+-- ----------------------------------------------------------------------------
+-- Booleans
+
+instance BooleanAlgebra Bool where
+  top = True
+  bottom = False
+  disjunction = (||)
+  conjunction = (&&)
+  negate = not

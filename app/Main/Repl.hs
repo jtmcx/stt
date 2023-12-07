@@ -54,6 +54,8 @@ options =
   , ("q",       const R.abort)
   , ("quit",    const R.abort)
   , ("unicode", cmdUnicode)
+  , ("v",       cmdValue)
+  , ("value",   cmdValue)
   ]
 
 -- | Print the list of options.
@@ -69,7 +71,8 @@ cmdHelp _ = mapM_ (\(x, y) -> liftIO $ printf "%-16s %s\n" x y) table
       , (":paste",         "Read multiple lines of input")
       , (":pp",            "Pretty print an expression")
       , (":q :quit",       "Exit the REPL")
-      , (":unicode [y|n]", "Enable/disable unicode printing")
+      , (":unicode [y|n]", "Enable/disable unicode output")
+      , (":v :value",      "Print the internal strucutre of an evaluated term")
       ]
 
 -- | Parse an expression and print its AST.
@@ -103,7 +106,7 @@ cmdLoad line = mapM_ load (words line)
     load :: String -> Repl ()
     load path = do
       -- TODO: catch execptions when reading.
-      liftIO $ putStrLn ("Loading " ++ path)
+      liftIO $ putStrLn ("Loading " ++ path ++ "...")
       text <- liftIO (readFile path)
       decls <- unwrap $ parseFile path text
       mapM_ each decls
@@ -113,6 +116,7 @@ cmdLoad line = mapM_ load (words line)
       env <- gets replEnv
       modifyEnv (Map.insert x (eval env e))
 
+-- | Enable/disable unicode output.
 cmdUnicode :: String -> Repl ()
 cmdUnicode line =
   case trim line of
@@ -130,6 +134,14 @@ cmdUnicode line =
       case enc of
         Unicode -> liftIO $ putStrLn "yes"
         Ascii   -> liftIO $ putStrLn "no"
+
+-- | Print the internal strucutre of an evaluated term.
+cmdValue :: String -> Repl ()
+cmdValue line =
+  R.dontCrash $ do
+    e   <- unwrap $ parseExpr "repl" line
+    env <- gets replEnv
+    liftIO $ print (eval env e)
 
 -- | Handle a line of input from the repl.
 cmd :: String -> Repl ()

@@ -11,7 +11,7 @@ build:
 
 # Build and run the 'stt' executable
 run:
-	cabal run
+	cabal run stt -- -d "{{invocation_directory()}}"
 
 # Run the test suite
 test:

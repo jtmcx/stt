@@ -1,0 +1,43 @@
+-- Examples of recursion using fixpoints.
+
+-- Ye olde factorial example.
+sig fact' : Int → Int
+def fact' = fix λfact' x,
+  case x of
+  | 0   ⇒ 1
+  | Int ⇒ x * fact' (x - 1)
+
+-- A more "dynamic" version that accepts an 'x' of any type.
+sig fact : Any → (Int | false)
+def fact = λx,
+  case x of
+  | Int ⇒ case x >= 0 of
+          | true  ⇒ fact' x
+          | false ⇒ false
+  | Any ⇒ false
+
+-- Mutual Recursion
+-----------------------------------------------------------------------------
+--
+-- Fixpoints are not limited to lambdas. We can define a mutually recursive
+-- functions by defining a fixpoints over pairs.
+
+sig isEvenIsOdd : (Int → Int, Int → Int)
+def isEvenIsOdd = fix λself,
+  ( -- isEven
+    λx, case x of
+        | 0   ⇒ true
+        | Int ⇒ (snd self) (x - 1)
+  , -- isOdd
+    λx, case x of
+        | 0   ⇒ false
+        | Int ⇒ (fst self) (x - 1)
+  )
+
+-- Is a number even?
+sig isEven : Int → Int
+def isEven = fst isEvenIsOdd
+
+-- Is a number odd?
+sig isOdd : Int → Int
+def isOdd  = snd isEvenIsOdd

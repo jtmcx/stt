@@ -1,0 +1,38 @@
+-- Lists are defined using pairs and the unit value. For example:
+--
+--      ()              -- The empty list.
+--      (1, ())         -- The list containing 1.
+--      (1, (2, ()))    -- The list containing 1 and 2.
+--      ... and so on
+
+-- Calculate the length of a list.
+def length = fix λlength xs,
+  case xs of
+  | ()         => 0
+  | (Any, Any) => 1 + length (snd xs)
+
+-- Example:
+-- stt> length (1, (2, (3, ())))
+-- 3
+
+
+-- Append two lists.
+def append = fix λappend xs ys,
+  case xs of
+  | ()         => ys
+  | (Any, Any) => (fst xs, append (snd xs) ys)
+
+-- Example:
+-- stt> append (1, (2, ())) (3, ())
+-- (1, (2, (3, ())))
+
+
+-- Sum a list of integers.
+def sum = fix λsum xs,
+  case xs of
+  | ()         => 0
+  | (Int, Any) => fst xs + sum (snd xs)
+
+-- Example:
+-- stt> sum (1, (2, (3, ())))
+-- 6

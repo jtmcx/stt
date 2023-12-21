@@ -21,11 +21,13 @@ library
       , STT.Parser
       , STT.Pretty
       , STT.Pretty.SepBy
+      , STT.Subst
       , STT.Syntax
       , STT.Typing.BDD
       , STT.Typing.Classes.BooleanAlgebra
       , STT.Typing.DNFInt
       , STT.Typing.DNFBool
+      , STT.Typing.DNF
     build-depends:
         base          ^>= 4.16.4.0
       , containers    >= 0.6

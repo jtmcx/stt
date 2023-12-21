@@ -6,28 +6,62 @@ import Data.Text (Text)
 data Expr
   = EUnit
     -- ^ The unit value '()'.
-  | EInt Int
-    -- ^ A literal integer.
   | EBool Bool
     -- ^ A literal boolean.
+  | EInt Int
+    -- ^ A literal integer.
   | EPair Expr Expr
     -- ^ A pair.
-  | EVar Text
+  | EVar Text Int
     -- ^ A variable.
   | EApp Expr Expr
     -- ^ An application.
   | EFn Text Expr
     -- ^ A lambda.
+  | EFix Expr
+    -- ^ A fixpoint.
   | ELet Text Expr Expr
     -- ^ A let binding.
-  | EIf Expr Ty Expr Expr
-    -- ^ An if statement.
+  | ECase Expr [(Ty, Expr)]
+    -- ^ A case statement.
+  | EAnn Expr Ty
+    -- ^ A type annotation.
   | EFst Expr
     -- ^ First projection of a pair.
   | ESnd Expr
     -- ^ Second projection of a pair.
-  | EAnn Expr Ty
-    -- ^ A type annotation.
+  | EArith ArithOp
+    -- ^ Arithmetic operations.
+  | ECmp CmpOp
+    -- ^ Comparison operations.
+  deriving (Eq, Show)
+
+-- | Arithmetic operators.
+data ArithOp
+  = OpAdd Expr Expr
+    -- ^ @e1 + e2@
+  | OpSub Expr Expr
+    -- ^ @e1 - e2@
+  | OpMul Expr Expr
+    -- ^ @e1 * e2@
+  | OpDiv Expr Expr
+    -- ^ @e1 / e2@
+  | OpMod Expr Expr
+    -- ^ @e1 % e2@
+  deriving (Eq, Show)
+
+-- | Comparison operators.
+data CmpOp
+  = OpLT Expr Expr
+    -- ^ @e1 < e2@
+  | OpLE Expr Expr
+    -- ^ @e1 <= e2@
+  | OpEQ Expr Expr
+    -- ^ @e1 == e2@
+  | OpGE Expr Expr
+    -- ^ @e1 >= e2@
+  | OpGT Expr Expr
+    -- ^ @e1 > e2@
   deriving (Eq, Show)
 
 -- | Types.
@@ -58,5 +92,7 @@ data Ty
 
 -- | Top-level declarations.
 data Decl
-  = DDef Text Expr
+  = DSig Text Ty
+    -- ^ A top-level signature.
+  | DDef Text Expr
     -- ^ A top-level definition.

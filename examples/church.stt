@@ -1,4 +1,4 @@
-# Church numerals
+-- Church numerals
 
 def zero = \s z, z
 def succ = \p s z, s (p s z)
@@ -7,14 +7,3 @@ def _0 = zero
 def _1 = succ zero
 def _2 = succ (succ zero)
 def _3 = succ (succ (succ zero))
-
-# Loading this file into the REPL produces the following environment:
-#
-# stt> :load examples/church.stt
-# stt> :env
-# def _0 = λs, λz, z
-# def _1 = λs, λz, s z
-# def _2 = λs, λz, s (s z)
-# def _3 = λs, λz, s (s (s z))
-# def succ = λp, λs, λz, s (p s z)
-# def zero = λs, λz, z

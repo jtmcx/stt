@@ -1,175 +1,177 @@
 {-# LANGUAGE LambdaCase #-}
 
 module STT.Eval
-  ( Value(..)
-  , Closure(..)
-  , Env
+  ( Env
   , eval
-  , reify
-  , normalize
+  , steps
   ) where
 
+import Control.Monad.Except
 import Control.Monad.Reader (Reader, runReader, MonadReader(..))
 import Data.Text (Text)
-import qualified Data.Text as T
+import Data.Bifunctor (first)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import STT.Syntax (Expr (..), Ty(..))
+import STT.Syntax
+import STT.Subst (apply)
+import STT.Typing.DNF (dnf, subset)
 
 -- ----------------------------------------------------------------------------
--- Normal Form
-
--- | A value.
-data Value
-  = VUnit
-    -- ^ The unit value.
-  | VBool Bool
-    -- ^ A boolean.
-  | VInt Int
-    -- ^ An integer.
-  | VPair Value Value
-    -- ^ A pair.
-  | VAbs Closure
-    -- ^ A closure.
-  | VVar Text
-    -- ^ A variable.
-  | VFst Value
-    -- ^ First projection of a pair.
-  | VSnd Value
-    -- ^ Second projection of a pair.
-  | VApp Value Value
-    -- ^ An application.
-  deriving (Eq, Show)
-
--- | A lambda with a captured environment.
-data Closure = Closure Text Expr Env
-  deriving (Eq, Show)
+-- Small Step Evaluation
 
 -- | A list of bound variables.
-type Env = Map Text Value
+type Env = Map Text [Expr]
 
--- ----------------------------------------------------------------------------
--- Evaluation
+-- | A unit value that's thrown when we can't reduce an expression any
+-- further within the `Step` monad.
+data Stuck = Stuck
 
-type Eval = Reader Env
+-- | Monad for single-stepping expressions.
+type Step = ExceptT Stuck (Reader Env)
 
--- | Evaluate an expression into normal form.
-eval :: Env -> Expr -> Value
-eval env e = runReader (evalExpr e) env
+stuck :: Step a
+stuck = throwError Stuck
 
--- | Evaluate an expression into normal form.
-evalExpr :: Expr -> Eval Value
-evalExpr = \case
-  EUnit          -> return VUnit
-  EBool x        -> return (VBool x)
-  EInt x         -> return (VInt x)
-  EVar x         -> evalVar x
-  EPair e1 e2    -> evalPair e1 e2
-  EApp e1 e2     -> evalApp e1 e2
-  EFn x e        -> evalFn x e
-  EFst e         -> evalFst e
-  ESnd e         -> evalSnd e
-  ELet x e1 e2   -> evalLet x e1 e2
-  EIf e1 t e2 e3 -> evalIf e1 t e2 e3
-  EAnn e _       -> evalExpr e
+(<|>) :: Step a -> Step a -> Step a
+(<|>) m1 m2 = catchError m1 (const m2)
 
--- | Lookup a variable in the environment.
-evalVar :: Text -> Eval Value
-evalVar x = do
+step :: Expr -> Step Expr
+step = \case
+  EUnit           -> stuck
+  EBool _         -> stuck
+  EInt _          -> stuck
+  EPair e1 e2     -> stepPair e1 e2
+  EVar x i        -> stepVar x i
+  EApp e1 e2      -> stepApp e1 e2
+  EFn _ _         -> stuck
+  EFix e          -> stepFix e
+  ELet x e1 e2    -> stepLet x e1 e2
+  ECase e cases   -> stepCase e cases
+  EFst e          -> stepFst e
+  ESnd e          -> stepSnd e
+  EArith op       -> stepArith op
+  ECmp op         -> stepCmp op
+  EAnn e _        -> step e
+
+stepVar :: Text -> Int -> Step Expr
+stepVar x i = do
   env <- ask
   case Map.lookup x env of
-    Just v  -> return v
-    Nothing -> return (VVar x)
+    Just es -> return (es !! i)
+    Nothing -> stuck
 
--- | Evaluate the elements of a pair.
-evalPair :: Expr -> Expr -> Eval Value
-evalPair e1 e2 = do
-  v1 <- evalExpr e1
-  v2 <- evalExpr e2
-  return (VPair v1 v2)
+stepPair :: Expr -> Expr -> Step Expr
+stepPair e1 e2 =
+      do e1' <- step e1
+         return (EPair e1' e2)
+  <|> do e2' <- step e2
+         return (EPair e1 e2')
 
--- | Evaluate an application.
-evalApp :: Expr -> Expr -> Eval Value
-evalApp e1 e2 = do
-  v1 <- evalExpr e1
-  v2 <- evalExpr e2
-  case v1 of
-    VAbs closure -> instantiate closure v2
-    _            -> return (VApp v1 v2)
+stepApp :: Expr -> Expr -> Step Expr
+stepApp e1 e2 =
+      do e1' <- step e1
+         return (EApp e1' e2)
+  <|> do e2' <- step e2
+         return (EApp e1 e2')
+  <|> case e1 of
+        EFn x e -> return (apply x e e2)
+        _       -> stuck
+
+stepLet :: Text -> Expr -> Expr -> Step Expr
+stepLet x e1 e2 =
+      do e1' <- step e1
+         return (ELet x e1' e2)
+  <|> return (apply x e2 e1)
+
+stepFix :: Expr -> Step Expr
+stepFix e =
+      do e' <- step e
+         return (EFix e')
+  <|> case e of
+        EFn x e' -> return $ apply x e' (EFix e)
+        _        -> stuck
+
+stepCase :: Expr -> [(Ty, Expr)] -> Step Expr
+stepCase e cases =
+      do e' <- step e
+         return (ECase e' cases)
+  <|> do t <- typeOf e
+         case match t of
+           Just e' -> return e'
+           Nothing -> stuck
   where
-    instantiate :: Closure -> Value -> Eval Value
-    instantiate (Closure x e env) v =
-      local (const $ Map.insert x v env) (evalExpr e)
+    -- Find the first case where the type of the expression being
+    -- matched (t) is a subset of the given case (t').
+    match :: Ty -> Maybe Expr
+    match t = lookup True (map (first $ \t' -> dnf t `subset` dnf t') cases)
 
--- | Convert a lambda into a closure with the current 'Env'.
-evalFn :: Text -> Expr -> Eval Value
-evalFn x e = do
-  env <- ask
-  return $ VAbs (Closure x e env)
+    -- Calculate the type of a given expression at runtime. Only
+    -- "values" have types at runtime. Note that functions always have
+    -- the type `⊥ → ⊤` (i.e., the super type of all functions).
+    typeOf :: Expr -> Step Ty
+    typeOf = \case
+      EUnit       -> return TUnit
+      EBool x     -> return $ TBool (Just x)
+      EInt x      -> return $ TInt (Just x)
+      EFn _ _     -> return $ TFn TEmpty TAny
+      EPair v1 v2 -> TPair <$> typeOf v1 <*> typeOf v2
+      _           -> stuck
 
-evalFst :: Expr -> Eval Value
-evalFst e = do
-  v <- evalExpr e
-  case v of
-    VPair x _ -> return x
-    _         -> return (VFst v)
+stepFst :: Expr -> Step Expr
+stepFst e =
+      do e' <- step e
+         return (EFst e')
+  <|> case e of
+        EPair e1 _ -> return e1
+        _          -> stuck
 
-evalSnd :: Expr -> Eval Value
-evalSnd e = do
-  v <- evalExpr e
-  case v of
-    VPair _ x -> return x
-    _         -> return (VSnd v)
+stepSnd :: Expr -> Step Expr
+stepSnd e =
+      do e' <- step e
+         return (ESnd e')
+  <|> case e of
+        EPair _ e2 -> return e2
+        _          -> stuck
 
--- | Evaluate a let binding.
-evalLet :: Text -> Expr -> Expr -> Eval Value
-evalLet x e1 e2 = do
-  v1 <- evalExpr e1
-  local (Map.insert x v1) $ evalExpr e2
+stepArith :: ArithOp -> Step Expr
+stepArith = \case
+    OpAdd e1 e2 -> binary OpAdd (+) e1 e2
+    OpSub e1 e2 -> binary OpSub (-) e1 e2
+    OpMul e1 e2 -> binary OpMul (*) e1 e2
+    OpDiv e1 e2 -> binary OpDiv div e1 e2
+    OpMod e1 e2 -> binary OpAdd mod e1 e2
+  where
+    binary op f e1 e2 =
+          do e1' <- step e1
+             return (EArith (op e1' e2))
+      <|> do e2' <- step e2
+             return (EArith (op e1 e2'))
+      <|> case (e1, e2) of
+            (EInt x, EInt y) -> return $ EInt (x `f` y)
+            _                -> stuck
 
-evalIf :: Expr -> Ty -> Expr -> Expr -> Eval Value
-evalIf = undefined
+stepCmp :: CmpOp -> Step Expr
+stepCmp = \case
+    OpLT e1 e2 -> binary OpLT (<) e1 e2
+    OpLE e1 e2 -> binary OpLE (<=) e1 e2
+    OpEQ e1 e2 -> binary OpEQ (==) e1 e2
+    OpGE e1 e2 -> binary OpGE (>=) e1 e2
+    OpGT e1 e2 -> binary OpGT (>) e1 e2
+  where
+    binary op f e1 e2 =
+          do e1' <- step e1
+             return (ECmp (op e1' e2))
+      <|> do e2' <- step e2
+             return (ECmp (op e1 e2'))
+      <|> case (e1, e2) of
+            (EInt x, EInt y) -> return $ EBool (x `f` y)
+            _                -> stuck
 
--- ----------------------------------------------------------------------------
--- Reification
+steps :: Env -> Expr -> [Expr]
+steps env e =
+  case runReader (runExceptT (step e)) env of
+    Right e'   -> e' : steps env e'
+    Left Stuck -> []
 
-type Reify = Reader [Text]
-
--- | Readback a 'Value' as an 'Expr'.
-reify :: [Text] -> Value -> Expr
-reify names v = runReader (reifyValue v) names
-
--- | Readback a 'Value' as an 'Expr'.
-reifyValue :: Value -> Reify Expr
-reifyValue = \case
-  VUnit        -> return EUnit
-  VBool x      -> return (EBool x)
-  VInt x       -> return (EInt x)
-  VVar x       -> return (EVar x)
-  VPair v1 v2  -> EPair <$> reifyValue v1 <*> reifyValue v2
-  VApp v1 v2   -> EApp <$> reifyValue v1 <*> reifyValue v2
-  VAbs closure -> reifyClosure closure
-  VFst v       -> EFst <$> reifyValue v
-  VSnd v       -> ESnd <$> reifyValue v
-
--- | Readback a 'Closure' as an 'Expr'.
-reifyClosure :: Closure -> Reify Expr
-reifyClosure (Closure x e env) = do
-  x' <- freshen x
-  let v = eval (Map.insert x (VVar x') env) e
-  EFn x' <$> local (x' :) (reifyValue v)
-
--- | Generate a fresh variable name.
-freshen :: Text -> Reify Text
-freshen x = do
-  names <- ask
-  if x `elem` names
-    then freshen (T.snoc x '\'')
-    else return x
-
--- ----------------------------------------------------------------------------
--- Normalization
-
--- | Evaluate and reify a given expression.
-normalize :: Env -> Expr -> Expr
-normalize env e = reify (Map.keys env) (eval env e)
+eval :: Env -> Expr -> Expr
+eval env e = last (e : steps env e)

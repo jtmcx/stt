@@ -1,6 +1,7 @@
 module Main where
 
 import Main.Repl (repl)
+import Control.Monad (forM_)
 import Options.Applicative
 import System.Directory
 
@@ -27,8 +28,7 @@ main = do
     info (argParser <**> helper) fullDesc
 
   -- Set the current directory, if applicable.
-  case argDirectory args of
-    Just dir -> setCurrentDirectory dir
-    Nothing  -> return ()
+  forM_ (argDirectory args) setCurrentDirectory
 
+  -- Start the repl.
   repl

@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Main.Repl (repl) where
 
 import Control.Monad.Trans
@@ -9,11 +11,11 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import Text.Printf (printf)
+import System.IO (hFlush, stdout)
 import STT.Eval
 import STT.Parser
 import STT.Syntax
 import STT.Pretty
-
 
 type Repl a = R.HaskelineT (StateT ReplState IO) a
 
@@ -50,12 +52,13 @@ options =
   , ("help",    cmdHelp)
   , ("l",       cmdLoad)
   , ("load",    cmdLoad)
-  , ("pp",      cmdPP)
+  , ("pp",      cmdPretty)
+  , ("pretty",  cmdPretty)
+  , ("reset",   cmdReset)
+  , ("debug",   cmdDebug)
   , ("q",       const R.abort)
   , ("quit",    const R.abort)
   , ("unicode", cmdUnicode)
-  , ("v",       cmdValue)
-  , ("value",   cmdValue)
   ]
 
 -- | Print the list of options.
@@ -69,10 +72,11 @@ cmdHelp _ = mapM_ (\(x, y) -> liftIO $ printf "%-16s %s\n" x y) table
       , (":h :help",       "Print this message")
       , (":l :load",       "Load definitions from a file")
       , (":paste",         "Read multiple lines of input")
-      , (":pp",            "Pretty print an expression")
+      , (":pp :pretty",    "Pretty print an expression without evaluating it")
+      , (":reset",         "Reset the REPL state to an empty environment")
+      , (":debug",         "Print all steps of an evaulation")
       , (":q :quit",       "Exit the REPL")
       , (":unicode [y|n]", "Enable/disable unicode output")
-      , (":v :value",      "Print the internal strucutre of an evaluated term")
       ]
 
 -- | Parse an expression and print its AST.
@@ -86,18 +90,21 @@ cmdAst line =
 cmdEnv :: String -> Repl ()
 cmdEnv _ = do
     env <- gets replEnv
-    mapM_ (each env) (Map.toList env)
+    mapM_ each (Map.keys env)
   where
-    each :: Env -> (Text, Value) -> Repl ()
-    each env (x, n) =
-      ppDecl $ DDef x (reify (Map.keys env) n)
+    each :: Text -> Repl ()
+    each x = liftIO $ putStrLn (T.unpack x)
 
--- | Pretty print an expression.
-cmdPP :: String -> Repl ()
-cmdPP line =
+-- | Pretty print an expression without evaluating it
+cmdPretty :: String -> Repl ()
+cmdPretty line =
   R.dontCrash $ do
     e <- unwrap $ parseExpr "repl" line
     ppExpr e
+
+-- | Reset the REPL state to an empty environment.
+cmdReset :: String -> Repl ()
+cmdReset _ = modifyEnv (const Map.empty)
 
 -- | Load definitions from a file.
 cmdLoad :: String -> Repl ()
@@ -112,18 +119,25 @@ cmdLoad line = mapM_ load (words line)
       mapM_ each decls
 
     each :: Decl -> Repl ()
-    each (DDef x e) = do
-      env <- gets replEnv
-      modifyEnv (Map.insert x (eval env e))
+    each = \case
+      DDef x e -> do
+        env <- gets replEnv
+        let e' = eval env e
+        modifyEnv (Map.insert x [e'])
+      DSig _ _ ->
+        return ()
+
 
 -- | Enable/disable unicode output.
 cmdUnicode :: String -> Repl ()
 cmdUnicode line =
   case trim line of
-    "y" -> setEncoding Unicode
-    "n" -> setEncoding Ascii
-    ""  -> showCurrent
-    _   -> liftIO $ putStrLn "?"
+    "y"   -> setEncoding Unicode
+    "yes" -> setEncoding Unicode
+    "n"   -> setEncoding Ascii
+    "no"  -> setEncoding Ascii
+    ""    -> showCurrent
+    _     -> liftIO $ putStrLn "'yes' or 'no', please."
   where
     setEncoding :: Encoding -> Repl ()
     setEncoding enc = modify $ \s -> s { replEncoding = enc }
@@ -135,13 +149,13 @@ cmdUnicode line =
         Unicode -> liftIO $ putStrLn "yes"
         Ascii   -> liftIO $ putStrLn "no"
 
--- | Print the internal strucutre of an evaluated term.
-cmdValue :: String -> Repl ()
-cmdValue line =
+-- | Handle a line of input from the repl.
+cmdDebug :: String -> Repl ()
+cmdDebug line =
   R.dontCrash $ do
-    e   <- unwrap $ parseExpr "repl" line
-    env <- gets replEnv
-    liftIO $ print (eval env e)
+    expr <- unwrap $ parseExpr "repl" line
+    env  <- gets replEnv
+    mapM_ ppExpr (expr : steps env expr)
 
 -- | Handle a line of input from the repl.
 cmd :: String -> Repl ()
@@ -151,12 +165,13 @@ cmd line =
     case s of
       Right expr -> do
         env <- gets replEnv
-        ppExpr $ normalize env expr
+        ppExpr (eval env expr)
       Left (DDef x e) -> do
         env <- gets replEnv
-        let v = eval env e
-        modifyEnv (Map.insert x v)
-        ppDecl $ DDef x (reify (Map.keys env) v)
+        let e' = eval env e
+        modifyEnv (Map.insert x [e'])
+      Left (DSig _ _) ->
+        return ()
 
 -- | Return auto-complete suggestions for a given identifier.
 complete :: String -> StateT ReplState IO [String]
@@ -186,14 +201,6 @@ ansify AnnKeyword  = Terminal.color Terminal.Blue
 ansify AnnLiteral  = Terminal.color Terminal.Red
 ansify AnnTypeName = Terminal.color Terminal.Cyan
 
--- | Pretty print a declaration.
-ppDecl :: Decl -> Repl ()
-ppDecl x = do
-  enc <- gets replEncoding
-  liftIO $ do
-    Terminal.putDoc (P.reAnnotate ansify $ prettyDecl enc x)
-    putStrLn ""
-
 -- | Pretty print an expression.
 ppExpr :: Expr -> Repl ()
 ppExpr x = do
@@ -201,6 +208,7 @@ ppExpr x = do
   liftIO $ do
     Terminal.putDoc (P.reAnnotate ansify $ prettyExpr enc x)
     putStrLn ""
+    hFlush stdout
 
 -- ---------------------------------------------------------------------------
 -- Miscellaneous

@@ -15,7 +15,7 @@ import Prettyprinter (Doc, Pretty, pretty, (<+>))
 import qualified Prettyprinter as P
 import Data.Text (Text)
 import Data.Bifunctor (first)
-import STT.Syntax (Decl(..), Expr(..), Ty(..))
+import STT.Syntax (Decl(..), Expr(..), Ty(..), ArithOp(..), CmpOp(..))
 import STT.Pretty.SepBy (SepByStyle(..), sepBy)
 
 -- | todo: ...
@@ -136,27 +136,26 @@ instance Pretty Expr where
 
 prettyExpr :: Encoding -> Expr -> Doc Ann
 prettyExpr enc = \case
-    EIf e1 ty e2 e3 -> prettyEIf enc e1 ty e2 e3
-    ELet x e1 e2    -> prettyELet enc x e1 e2
-    EFn x e         -> uncurry (prettyEFn enc) $ collectArgs (EFn x e)
-    e               -> prettyEAnn enc e
-  where
-    collectArgs :: Expr -> ([Text], Expr)
-    collectArgs (EFn x e) = first (x :) (collectArgs e)
-    collectArgs e = ([], e)
+    ELet x e1 e2  -> prettyELet enc x e1 e2
+    EFn x e       -> prettyEFn enc x e
+    EFix e        -> prettyEFix enc e
+    ECase e cases -> prettyECase enc e cases
+    e             -> prettyEAnn enc e
 
-prettyEIf :: Encoding -> Expr -> Ty -> Expr -> Expr -> Doc Ann
-prettyEIf enc e1 ty e2 e3 =
-  P.nest 2 $ P.vsep
-    [ _if <+> prettyExpr enc e1 <+> _is <+> prettyTy enc Hang ty
-    , _then <+> prettyExpr enc e2
-    , _else <+> prettyExpr enc e3
-    ]
+prettyECase :: Encoding -> Expr -> [(Ty, Expr)] -> Doc Ann
+prettyECase enc e cases =
+  P.hang 0 $ P.vsep $
+    _case <+> prettyExpr enc e <+> _of : map each cases
   where
-    _if   = P.annotate AnnKeyword "if"
-    _is   = P.annotate AnnKeyword "is"
-    _then = P.annotate AnnKeyword "then"
-    _else = P.annotate AnnKeyword "else"
+    _case = P.annotate AnnKeyword "case"
+    _of   = P.annotate AnnKeyword "of"
+
+    each :: (Ty, Expr) -> Doc Ann
+    each (t, e') =
+      P.group $ P.nest 4 $ P.vsep
+        [ "|" <+> prettyTy enc Naked t <+> "=>"
+        , prettyExpr enc e'
+        ]
 
 prettyELet :: Encoding -> Text -> Expr -> Expr -> Doc Ann
 prettyELet enc x e1 e2 =
@@ -168,22 +167,56 @@ prettyELet enc x e1 e2 =
     _let = P.annotate AnnKeyword "let"
     _in  = P.annotate AnnKeyword "in"
 
-prettyEFn :: Encoding -> [Text] -> Expr -> Doc Ann
-prettyEFn enc xs e =
-  P.nest 2 $ P.sep
-    [ lambda <> P.hsep (map pretty xs) <> ","
-    , prettyExpr enc e
-    ]
+prettyEFix :: Encoding -> Expr -> Doc Ann
+prettyEFix enc = \case
+    EFn x e -> _fix <+> prettyEFn enc x e
+    e       -> _fix <+> prettyTerm enc e
   where
+    _fix = P.annotate AnnKeyword "fix"
+
+prettyEFn :: Encoding -> Text -> Expr -> Doc Ann
+prettyEFn enc = \x e -> uncurry go $ collect (EFn x e)
+  where
+    go :: [Text] -> Expr -> Doc Ann
+    go xs e = P.nest 2 $ P.sep
+      [ lambda <> P.hsep (map pretty xs) <> ","
+      , prettyExpr enc e
+      ]
+
     lambda :: Doc Ann
     lambda = case enc of
       Ascii   -> P.annotate AnnKeyword "\\"
       Unicode -> P.annotate AnnKeyword "λ"
 
+    collect :: Expr -> ([Text], Expr)
+    collect (EFn x e) = first (x :) (collect e)
+    collect e = ([], e)
+
 prettyEAnn :: Encoding -> Expr -> Doc Ann
 prettyEAnn enc = \case
-  EAnn e t -> prettyEApp enc e <+> ":" <+> prettyTy enc Hang t
-  e        -> prettyEApp enc e
+  EAnn e t -> prettyECmp enc e <+> ":" <+> prettyTy enc Hang t
+  e        -> prettyECmp enc e
+
+prettyECmp :: Encoding -> Expr -> Doc Ann
+prettyECmp enc = \case
+  ECmp (OpLT e1 e2) -> prettyECmp enc e1 <+> "<"  <+> prettyECmp enc e2 
+  ECmp (OpLE e1 e2) -> prettyECmp enc e1 <+> "<=" <+> prettyECmp enc e2 
+  ECmp (OpEQ e1 e2) -> prettyECmp enc e1 <+> "==" <+> prettyECmp enc e2 
+  ECmp (OpGE e1 e2) -> prettyECmp enc e1 <+> ">=" <+> prettyECmp enc e2 
+  ECmp (OpGT e1 e2) -> prettyECmp enc e1 <+> ">"  <+> prettyECmp enc e2
+  e                 -> prettyEArith enc e
+
+prettyEArith :: Encoding -> Expr -> Doc Ann
+prettyEArith enc = level1
+  where
+    level1 = \case
+      EArith (OpAdd e1 e2) -> level1 e1 <+> "+" <+> level1 e2
+      EArith (OpSub e1 e2) -> level1 e1 <+> "-" <+> level1 e2
+      e -> level2 e
+    level2 = \case
+      EArith (OpMul e1 e2) -> level2 e1 <+> "*" <+> level2 e2
+      EArith (OpDiv e1 e2) -> level2 e1 <+> "/" <+> level2 e2
+      e -> prettyEApp enc e
 
 prettyEApp :: Encoding -> Expr -> Doc Ann
 prettyEApp enc = \case
@@ -193,14 +226,24 @@ prettyEApp enc = \case
   e          -> prettyTerm enc e
 
 prettyTerm :: Encoding -> Expr -> Doc Ann
-prettyTerm enc = \case
-  EUnit       -> P.annotate AnnLiteral "()"
-  EBool True  -> P.annotate AnnLiteral "true"
-  EBool False -> P.annotate AnnLiteral "false"
-  EInt x      -> P.annotate AnnLiteral (pretty x)
-  EVar x      -> pretty x
-  EPair e1 e2 -> P.align $ P.tupled [prettyExpr enc e1, prettyExpr enc e2]
-  e           -> P.parens $ prettyExpr enc e
+prettyTerm enc e = case e of
+  EUnit             -> P.annotate AnnLiteral "()"
+  EBool True        -> P.annotate AnnLiteral "true"
+  EBool False       -> P.annotate AnnLiteral "false"
+  EInt x            -> P.annotate AnnLiteral (pretty x)
+  EVar x n | n == 0 -> pretty x
+  EVar x n          -> pretty x <> "@" <> pretty n
+  EPair e1 e2       -> P.align $ P.tupled [prettyExpr enc e1, prettyExpr enc e2]
+  ELet{}            -> P.parens $ prettyExpr enc e
+  EFn{}             -> P.parens $ prettyExpr enc e
+  EFix{}            -> P.parens $ prettyExpr enc e
+  ECase{}           -> P.parens $ prettyExpr enc e
+  EAnn{}            -> P.parens $ prettyExpr enc e
+  EApp{}            -> P.parens $ prettyExpr enc e
+  EFst{}            -> P.parens $ prettyExpr enc e
+  ESnd{}            -> P.parens $ prettyExpr enc e
+  EArith{}          -> P.parens $ prettyExpr enc e
+  ECmp{}            -> P.parens $ prettyExpr enc e
 
 -- ----------------------------------------------------------------------------
 -- Pretty Declarations
@@ -209,6 +252,10 @@ instance Pretty Decl where
   pretty = P.unAnnotate . prettyDecl Unicode
 
 prettyDecl :: Encoding -> Decl -> Doc Ann
-prettyDecl enc (DDef x e) =
-  let def = P.annotate AnnKeyword "def" in
-  def <+> pretty x <+> "=" <+> prettyExpr enc e
+prettyDecl enc = \case
+  DDef x e ->
+    let def = P.annotate AnnKeyword "def" in
+    def <+> pretty x <+> "=" <+> prettyExpr enc e
+  DSig x t ->
+    let sig = P.annotate AnnKeyword "sig" in
+    sig <+> pretty x <+> ":" <+> prettyTy enc Hang t

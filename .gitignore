@@ -1,5 +1,6 @@
 # direnv
 .direnv
+.envrc
 
 # cabal
 cabal-dev
@@ -15,3 +16,5 @@ dist-*
 # misc
 *.old
 *.bak
+\#*\#
+*~

@@ -11,9 +11,9 @@ def fact' = fix λfact' x,
 sig fact : Any → (Int | false)
 def fact = λx,
   case x of
-  | Int ⇒ case x >= 0 of
-          | true  ⇒ fact' x
-          | false ⇒ false
+  | Int ⇒ (case x >= 0 of
+           | true  ⇒ fact' x
+           | false ⇒ false)
   | Any ⇒ false
 
 -- Mutual Recursion

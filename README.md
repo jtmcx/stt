@@ -14,9 +14,9 @@ def fact' = fix λfact' x,
 sig fact : Any → (Int | false)
 def fact = λx,
   case x of
-  | Int ⇒ case x >= 0 of
-          | true  ⇒ fact' x
-          | false ⇒ false
+  | Int ⇒ (case x >= 0 of
+           | true  ⇒ fact' x
+           | false ⇒ false)
   | Any ⇒ false
 ```
 
@@ -40,7 +40,7 @@ statement), but static types (i.e. annotations and type signatures)
 are ignored.
 
 The evaluator is fully functional. There is even a (crude) single-step
-debugger avilable in the REPL. The pretty-printer was hacked-on a little
+debugger avilable in the REPL. The pretty-printer was hacked on a little
 bit too much, and has some warts. It generally prints the right thing.
 
 ## Running
@@ -75,7 +75,25 @@ To drop into an *stt* REPL, use `just run`:
 
 ```
 $ just run
+stt> :help
+:ast             Parse an expression and print its AST
+:env             Print the current environment
+:h :help         Print this message
+:l :load         Load definitions from a file
+:paste           Read multiple lines of input
+:pp :pretty      Pretty print an expression without evaluating it
+:reset           Reset the REPL state to an empty environment
+:debug           Print all steps of an evaulation
+:q :quit         Exit the REPL
+:unicode [y|n]   Enable/disable unicode output
+```
+
+To run the factorial example above:
+
+```
 stt> :load examples/recursion.stt
 stt> fact 6
 720
+stt> fact true
+false
 ```
